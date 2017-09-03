@@ -8,9 +8,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use core::cmp::Ordering;
-
-use borrow::Borrow;
+use core::cmp::{Ordering, OrdWith};
 
 use super::node::{Handle, NodeRef, marker};
 
@@ -26,7 +24,7 @@ pub fn search_tree<BorrowType, K, V, Q: ?Sized>(
     mut node: NodeRef<BorrowType, K, V, marker::LeafOrInternal>,
     key: &Q
 ) -> SearchResult<BorrowType, K, V, marker::LeafOrInternal, marker::Leaf>
-        where Q: Ord, K: Borrow<Q> {
+        where Q: OrdWith<K> {
 
     loop {
         match search_node(node, key) {
@@ -46,7 +44,7 @@ pub fn search_node<BorrowType, K, V, Type, Q: ?Sized>(
     node: NodeRef<BorrowType, K, V, Type>,
     key: &Q
 ) -> SearchResult<BorrowType, K, V, Type, Type>
-        where Q: Ord, K: Borrow<Q> {
+        where Q: OrdWith<K> {
 
     match search_linear(&node, key) {
         (idx, true) => Found(
@@ -62,10 +60,10 @@ pub fn search_linear<BorrowType, K, V, Type, Q: ?Sized>(
     node: &NodeRef<BorrowType, K, V, Type>,
     key: &Q
 ) -> (usize, bool)
-        where Q: Ord, K: Borrow<Q> {
+        where Q: OrdWith<K> {
 
     for (i, k) in node.keys().iter().enumerate() {
-        match key.cmp(k.borrow()) {
+        match key.cmp_with(k) {
             Ordering::Greater => {},
             Ordering::Equal => return (i, true),
             Ordering::Less => return (i, false)

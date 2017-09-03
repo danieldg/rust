@@ -92,6 +92,7 @@
 #![feature(custom_attribute)]
 #![feature(dropck_eyepatch)]
 #![feature(exact_size_is_empty)]
+#![feature(extended_search_types)]
 #![feature(fmt_internals)]
 #![feature(fundamental)]
 #![feature(fused)]

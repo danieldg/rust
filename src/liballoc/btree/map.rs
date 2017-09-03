@@ -8,7 +8,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use core::cmp::Ordering;
+use core::cmp::{Ordering, OrdWith};
 use core::fmt::Debug;
 use core::hash::{Hash, Hasher};
 use core::iter::{FromIterator, Peekable, FusedIterator};
@@ -218,8 +218,7 @@ impl<K: Clone, V: Clone> Clone for BTreeMap<K, V> {
 }
 
 impl<K, Q: ?Sized> super::Recover<Q> for BTreeMap<K, ()>
-    where K: Borrow<Q> + Ord,
-          Q: Ord
+    where Q: OrdWith<K>, K : Ord
 {
     type Key = K;
 
@@ -576,6 +575,17 @@ impl<K: Ord, V> BTreeMap<K, V> {
         }
     }
 
+    /// Same as get() but better
+    #[unstable(feature = "extended_search_types", issue="0")]
+    pub fn get_by<Q: ?Sized>(&self, key: &Q) -> Option<&V>
+        where Q: OrdWith<K>
+    {
+        match search::search_tree(self.root.as_ref(), key) {
+            Found(handle) => Some(handle.into_kv().1),
+            GoDown(_) => None,
+        }
+    }
+
     /// Returns `true` if the map contains a value for the specified key.
     ///
     /// The key may be any borrowed form of the map's key type, but the ordering
@@ -625,6 +635,17 @@ impl<K: Ord, V> BTreeMap<K, V> {
     pub fn get_mut<Q: ?Sized>(&mut self, key: &Q) -> Option<&mut V>
         where K: Borrow<Q>,
               Q: Ord
+    {
+        match search::search_tree(self.root.as_mut(), key) {
+            Found(handle) => Some(handle.into_kv_mut().1),
+            GoDown(_) => None,
+        }
+    }
+
+    /// Same as get_mut() but accepts more types as key
+    #[unstable(feature = "extended_search_types", issue="0")]
+    pub fn get_mut_by<Q: ?Sized>(&mut self, key: &Q) -> Option<&mut V>
+        where Q: OrdWith<K>
     {
         match search::search_tree(self.root.as_mut(), key) {
             Found(handle) => Some(handle.into_kv_mut().1),
@@ -691,6 +712,24 @@ impl<K: Ord, V> BTreeMap<K, V> {
     pub fn remove<Q: ?Sized>(&mut self, key: &Q) -> Option<V>
         where K: Borrow<Q>,
               Q: Ord
+    {
+        match search::search_tree(self.root.as_mut(), key) {
+            Found(handle) => {
+                Some(OccupiedEntry {
+                         handle,
+                         length: &mut self.length,
+                         _marker: PhantomData,
+                     }
+                     .remove())
+            }
+            GoDown(_) => None,
+        }
+    }
+
+    /// Same as remove() but accepts more search types
+    #[unstable(feature = "extended_search_types", issue="0")]
+    pub fn remove_by<Q: ?Sized>(&mut self, key: &Q) -> Option<V>
+        where Q: OrdWith<K>
     {
         match search::search_tree(self.root.as_mut(), key) {
             Found(handle) => {

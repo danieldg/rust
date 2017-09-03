@@ -614,7 +614,7 @@ impl<T: Ord> BTreeSet<T> {
     /// one. Returns the replaced value.
     #[stable(feature = "set_recovery", since = "1.9.0")]
     pub fn replace(&mut self, value: T) -> Option<T> {
-        Recover::replace(&mut self.map, value)
+        <_ as Recover<T>>::replace(&mut self.map, value)
     }
 
     /// Removes a value from the set. Returns `true` if the value was
