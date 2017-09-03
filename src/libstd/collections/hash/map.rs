@@ -8,7 +8,7 @@ use borrow::Borrow;
 use cmp::max;
 use fmt::{self, Debug};
 #[allow(deprecated)]
-use hash::{Hash, Hasher, BuildHasher, SipHasher13};
+use hash::{Hash, Hasher, HashEq, BuildHasher, SipHasher13};
 use iter::{FromIterator, FusedIterator};
 use mem::{self, replace};
 use ops::{Deref, DerefMut, Index};
@@ -631,30 +631,28 @@ impl<K, V, S> HashMap<K, V, S>
     #[inline]
     fn search<'a, Q: ?Sized>(&'a self, q: &Q)
         -> Option<FullBucket<K, V, &'a RawTable<K, V>>>
-        where K: Borrow<Q>,
-              Q: Eq + Hash
+        where Q: HashEq<K>
     {
         if self.is_empty() {
             return None;
         }
 
         let hash = self.make_hash(q);
-        search_hashed_nonempty(&self.table, hash, |k| q.eq(k.borrow()), true)
+        search_hashed_nonempty(&self.table, hash, |k| q.eq(k), true)
             .into_occupied_bucket()
     }
 
     #[inline]
     fn search_mut<'a, Q: ?Sized>(&'a mut self, q: &Q)
         -> Option<FullBucket<K, V, &'a mut RawTable<K, V>>>
-        where K: Borrow<Q>,
-              Q: Eq + Hash
+        where Q: HashEq<K>
     {
         if self.is_empty() {
             return None;
         }
 
         let hash = self.make_hash(q);
-        search_hashed_nonempty(&mut self.table, hash, |k| q.eq(k.borrow()), true)
+        search_hashed_nonempty(&mut self.table, hash, |k| q.eq(k), true)
             .into_occupied_bucket()
     }
 
@@ -1304,6 +1302,14 @@ impl<K, V, S> HashMap<K, V, S>
         self.search(k).map(|bucket| bucket.into_refs().1)
     }
 
+    /// Same as get() but allows more possible types in the query
+    #[unstable(feature = "extended_search_types", issue="0")]
+    pub fn get_key_value_by<Q: ?Sized>(&self, k: &Q) -> Option<(&K, &V)>
+        where Q: HashEq<K>
+    {
+        self.search(k).map(|bucket| bucket.into_refs())
+    }
+
     /// Returns the key-value pair corresponding to the supplied key.
     ///
     /// The supplied key may be any borrowed form of the map's key type, but
@@ -1384,6 +1390,14 @@ impl<K, V, S> HashMap<K, V, S>
     pub fn get_mut<Q: ?Sized>(&mut self, k: &Q) -> Option<&mut V>
         where K: Borrow<Q>,
               Q: Hash + Eq
+    {
+        self.search_mut(k).map(|bucket| bucket.into_mut_refs().1)
+    }
+
+    /// Same as get_mut() but allows more possible types in the query
+    #[unstable(feature = "extended_search_types", issue="0")]
+    pub fn get_mut_by<Q: ?Sized>(&mut self, k: &Q) -> Option<&mut V>
+        where Q: HashEq<K>
     {
         self.search_mut(k).map(|bucket| bucket.into_mut_refs().1)
     }
@@ -1480,6 +1494,21 @@ impl<K, V, S> HashMap<K, V, S>
                 let (k, v, _) = pop_internal(bucket);
                 (k, v)
             })
+    }
+
+    /// Same as remove() but allows more possible types in the query and returns the key
+    #[unstable(feature = "extended_search_types", issue="0")]
+    pub fn remove_by<Q: ?Sized>(&mut self, k: &Q) -> Option<(K,V)>
+        where Q: HashEq<K>
+    {
+        if self.table.size() == 0 {
+            return None;
+        }
+
+        self.search_mut(k).map(|bucket| {
+            let (key, val, _) = pop_internal(bucket);
+            (key, val)
+        })
     }
 
     /// Retains only the elements specified by the predicate.
@@ -3260,9 +3289,9 @@ impl fmt::Debug for RandomState {
 }
 
 impl<K, S, Q: ?Sized> super::Recover<Q> for HashMap<K, (), S>
-    where K: Eq + Hash + Borrow<Q>,
+    where K: Eq + Hash,
           S: BuildHasher,
-          Q: Eq + Hash
+          Q: HashEq<K>
 {
     type Key = K;
 

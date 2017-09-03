@@ -1,6 +1,6 @@
 use borrow::Borrow;
 use fmt;
-use hash::{Hash, BuildHasher};
+use hash::{Hash, HashEq, BuildHasher};
 use iter::{Chain, FromIterator, FusedIterator};
 use ops::{BitOr, BitAnd, BitXor, Sub};
 
@@ -580,6 +580,14 @@ impl<T, S> HashSet<T, S>
         Recover::get(&self.map, value)
     }
 
+    /// Same as get() but allows more possible types in the query
+    #[unstable(feature = "extended_search_types", issue="0")]
+    pub fn get_by<Q: ?Sized>(&self, value: &Q) -> Option<&T>
+        where Q: HashEq<T>
+    {
+        Recover::get(&self.map, value)
+    }
+
     /// Returns `true` if `self` has no elements in common with `other`.
     /// This is equivalent to checking for an empty intersection.
     ///
@@ -693,7 +701,7 @@ impl<T, S> HashSet<T, S>
     /// ```
     #[stable(feature = "set_recovery", since = "1.9.0")]
     pub fn replace(&mut self, value: T) -> Option<T> {
-        Recover::replace(&mut self.map, value)
+        <_ as Recover<T>>::replace(&mut self.map, value)
     }
 
     /// Removes a value from the set. Returns whether the value was
@@ -747,6 +755,14 @@ impl<T, S> HashSet<T, S>
     pub fn take<Q: ?Sized>(&mut self, value: &Q) -> Option<T>
         where T: Borrow<Q>,
               Q: Hash + Eq
+    {
+        Recover::take(&mut self.map, value)
+    }
+
+    /// Same as take() but allows more possible types in the search
+    #[unstable(feature = "extended_search_types", issue="0")]
+    pub fn take_by<Q: ?Sized>(&mut self, value: &Q) -> Option<T>
+        where Q: HashEq<T>
     {
         Recover::take(&mut self.map, value)
     }

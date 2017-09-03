@@ -242,6 +242,7 @@
 #![feature(duration_constants)]
 #![feature(exact_size_is_empty)]
 #![feature(external_doc)]
+#![feature(extended_search_types)]
 #![feature(fixed_size_array)]
 #![feature(fn_traits)]
 #![feature(fnbox)]

@@ -851,6 +851,33 @@ pub fn max<T: Ord>(v1: T, v2: T) -> T {
     v1.max(v2)
 }
 
+/// Provides a total ordering across two types
+#[unstable(feature = "extended_search_types", issue="0")]
+pub trait OrdWith<Rhs : ?Sized> {
+    /// This method returns an `Ordering` between `self` and `other`.
+    ///
+    /// By convention, `self.cmp(&other)` returns the ordering matching the expression
+    /// `self <operator> other` if true.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::cmp::Ordering;
+    ///
+    /// assert_eq!(5.cmp(&10), Ordering::Less);
+    /// assert_eq!(10.cmp(&5), Ordering::Greater);
+    /// assert_eq!(5.cmp(&5), Ordering::Equal);
+    /// ```
+    fn cmp_with(&self, other : &Rhs) -> Ordering;
+}
+
+#[unstable(feature = "extended_search_types", issue="0")]
+impl<K : ?Sized, Q : ?Sized> OrdWith<K> for Q where K : super::borrow::Borrow<Q>, Q : Ord {
+    fn cmp_with(&self, other : &K) -> Ordering {
+        self.cmp(other.borrow())
+    }
+}
+
 // Implementation of PartialEq, Eq, PartialOrd and Ord for primitive types
 mod impls {
     use cmp::Ordering::{self, Less, Greater, Equal};

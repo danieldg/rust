@@ -542,6 +542,20 @@ impl<H> PartialEq for BuildHasherDefault<H> {
 #[stable(since = "1.29.0", feature = "build_hasher_eq")]
 impl<H> Eq for BuildHasherDefault<H> {}
 
+/// If you impl this trait, any equal items between Self and Rhs must have matching hashes
+#[unstable(feature = "extended_search_types", issue="0")]
+pub trait HashEq<Rhs : ?Sized> : Hash {
+    /// Return true if Self and other are equal
+    fn eq(&self, other : &Rhs) -> bool;
+}
+
+#[unstable(feature = "extended_search_types", issue="0")]
+impl<K : ?Sized, Q : ?Sized> HashEq<K> for Q where K : super::borrow::Borrow<Q>, Q : Hash + Eq {
+    fn eq(&self, other : &K) -> bool {
+        <Q as PartialEq>::eq(self, other.borrow())
+    }
+}
+
 //////////////////////////////////////////////////////////////////////////////
 
 mod impls {
