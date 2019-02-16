@@ -5,9 +5,9 @@
 
 #![allow(dead_code)] // runtime init functions not used during testing
 
-use ffi::OsString;
+use ffi::{OsString,OsStr,CStr};
 use marker::PhantomData;
-use vec;
+use os::unix::prelude::{OsStringExt,OsStrExt};
 
 /// One-time global initialization.
 pub unsafe fn init(argc: isize, argv: *const *const u8) { imp::init(argc, argv) }
@@ -21,28 +21,101 @@ pub fn args() -> Args {
 }
 
 pub struct Args {
-    iter: vec::IntoIter<OsString>,
+    argc: isize,
+    argv: *const *const u8,
     _dont_send_or_sync_me: PhantomData<*mut ()>,
 }
 
 impl Args {
-    pub fn inner_debug(&self) -> &[OsString] {
-        self.iter.as_slice()
+    pub fn inner_debug(&self) -> Vec<&OsStr> {
+        self.as_refs().collect()
+    }
+
+    pub fn as_refs(&self) -> ArgsRefs {
+        ArgsRefs {
+            argc : self.argc,
+            argv : self.argv,
+            _dont_send_or_sync_me: PhantomData
+        }
     }
 }
 
 impl Iterator for Args {
     type Item = OsString;
-    fn next(&mut self) -> Option<OsString> { self.iter.next() }
-    fn size_hint(&self) -> (usize, Option<usize>) { self.iter.size_hint() }
+    fn next(&mut self) -> Option<OsString> {
+        if self.argc != 0 {
+            unsafe {
+                let cstr = CStr::from_ptr(self.argv.read() as *const libc::c_char);
+                let rv = OsStringExt::from_vec(cstr.to_bytes().to_vec());
+                self.argc -= 1;
+                self.argv = self.argv.offset(1);
+                Some(rv)
+            }
+        } else {
+            None
+        }
+    }
+    fn size_hint(&self) -> (usize, Option<usize>) { (self.argc as usize, Some(self.argc as usize)) }
 }
 
 impl ExactSizeIterator for Args {
-    fn len(&self) -> usize { self.iter.len() }
+    fn len(&self) -> usize { self.argc as usize }
 }
 
 impl DoubleEndedIterator for Args {
-    fn next_back(&mut self) -> Option<OsString> { self.iter.next_back() }
+    fn next_back(&mut self) -> Option<OsString> {
+        if self.argc != 0 {
+            self.argc -= 1;
+            unsafe {
+                let cstr = CStr::from_ptr(*self.argv.offset(self.argc) as *const libc::c_char);
+                Some(OsStringExt::from_vec(cstr.to_bytes().to_vec()))
+            }
+        } else {
+            None
+        }
+    }
+}
+
+pub struct ArgsRefs<'a> {
+    argc: isize,
+    argv: *const *const u8,
+    _dont_send_or_sync_me: PhantomData<&'a mut *mut ()>,
+}
+
+impl<'a> Iterator for ArgsRefs<'a> {
+    type Item = &'a OsStr;
+    fn next(&mut self) -> Option<&'a OsStr> {
+        if self.argc != 0 {
+            unsafe {
+                let cstr = CStr::from_ptr(self.argv.read() as *const libc::c_char);
+                let rv = OsStrExt::from_bytes(cstr.to_bytes());
+                self.argc -= 1;
+                self.argv = self.argv.offset(1);
+                Some(rv)
+            }
+        } else {
+            None
+        }
+    }
+    fn size_hint(&self) -> (usize, Option<usize>) { (self.argc as usize, Some(self.argc as usize)) }
+}
+
+impl<'a> ExactSizeIterator for ArgsRefs<'a> {
+    fn len(&self) -> usize { self.argc as usize }
+}
+
+impl<'a> DoubleEndedIterator for ArgsRefs<'a> {
+    fn next_back(&mut self) -> Option<&'a OsStr> {
+        if self.argc != 0 {
+            self.argc -= 1;
+            unsafe {
+                let cstr = CStr::from_ptr(*self.argv.offset(self.argc) as *const libc::c_char);
+                Some(OsStrExt::from_bytes(cstr.to_bytes()))
+            }
+        } else {
+            None
+        }
+    }
 }
 
 #[cfg(any(target_os = "linux",
@@ -59,11 +132,8 @@ impl DoubleEndedIterator for Args {
           target_os = "fuchsia",
           target_os = "hermit"))]
 mod imp {
-    use os::unix::prelude::*;
     use ptr;
-    use ffi::{CStr, OsString};
     use marker::PhantomData;
-    use libc;
     use super::Args;
 
     use sys_common::mutex::Mutex;
@@ -87,19 +157,13 @@ mod imp {
     }
 
     pub fn args() -> Args {
-        Args {
-            iter: clone().into_iter(),
-            _dont_send_or_sync_me: PhantomData
-        }
-    }
-
-    fn clone() -> Vec<OsString> {
         unsafe {
             let _guard = LOCK.lock();
-            (0..ARGC).map(|i| {
-                let cstr = CStr::from_ptr(*ARGV.offset(i) as *const libc::c_char);
-                OsStringExt::from_vec(cstr.to_bytes().to_vec())
-            }).collect()
+            Args {
+                argc : ARGC,
+                argv : ARGV,
+                _dont_send_or_sync_me: PhantomData
+            }
         }
     }
 }
